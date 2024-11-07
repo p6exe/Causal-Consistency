@@ -44,6 +44,37 @@ def start_server(Selfport):
         pass
 
 
+#Connects to the server socket
+def connect_to_server():
+    # Create a socket (TCP/IP)
+    close_flag = True # flag for if the program closes
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.connect((HOST, PORT))  # Connect to the server
+
+    print(f"client connecting to server {HOST}:{PORT}")
+
+    # Receive a response from the server
+    while(close_flag == True):
+        commands = []
+        print("Commands: ",commands)
+        command = input("command: ").lower()
+
+        if(command == "recv"): 
+            recv(server_socket)
+        elif(command == "send"):
+            message = input("message: ")
+            send(server_socket, message)
+        elif(command == "close"):
+            close_client(server_socket)
+            close_flag = False
+        elif(command == "download"):
+            file_name = input("File name: ")
+            peer_ports = get_file_location(server_socket, file_name)
+            if(peer_ports):
+                download_from_peers(server_socket, peer_ports, file_name)
+        else:
+            print("not a valid command: ",commands)
+
 #Send a message to a specific client
 def send(client_socket, message):
     try:
@@ -103,15 +134,7 @@ def recv(client_socket):
     except ConnectionError as e:
         #Handle client disconnection
         close_socket(client_socket)
-    '''except ConnectionResetError:
-        print("Connection reset by client")
-        close_socket(client_socket)
-    except BrokenPipeError:
-        print("Broken pipe: Client disconnected abruptly")
-        close_socket(client_socket)
-    except OSError as e:
-        print(f"OS error: {e}")
-        close_socket(client_socket)'''
+
     
 
 def register(client_socket):
