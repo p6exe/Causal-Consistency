@@ -6,6 +6,10 @@ import os
 The Master is a Server that is connected to all the servers and holds the port of all ports
 
 '''
+
+HOST = '127.0.0.1'  # Localhost
+PORT = 58008        # Port 
+
 #Start the server
 def start_server():
     
@@ -21,8 +25,20 @@ def start_server():
 
     #using select to manage the sockets
     while True:
-        readable, writable, exceptional = select.select(sockets_list, sockets_list, sockets_list)
-        pass
+        for current_socket in readable:
+            if current_socket == server_socket: #establish new connections
+
+                client_socket, client_address = server_socket.accept()
+                print(f"Connected by {client_address}")
+                
+                #Set the client socket to non-blocking and add to monitoring list
+                client_addresses[client_socket] = client_address
+                client_socket.setblocking(True)                                  #doesn't work
+                sockets_list.append(client_socket)
+
+#handles when new servers are added
+def new_server_added():
+    pass
 
 
 HOST = '127.0.0.1'  # Localhost

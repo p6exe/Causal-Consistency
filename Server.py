@@ -9,25 +9,28 @@ is it just messages that we are sending?
 how does read work?
 
 maybe setup a master server?
-connect sever with servers
-
+connect server with servers
+allow clients to connect
+send writes to other servers
 '''
 
 
 HOST = '127.0.0.1'  # Localhost
 PORT = 58008        # Port 
+MASTER_PORT = 58008
 
+messages = {}
 send_buffer = {}    # Buffers that stores the sockets that need a reply after they request
-sockets_list = []   # List of all sockets (including server socket)
-files = {}          # List of files {file name : file object}
-DEFAULT_CHUNK_SIZE = 4096
-busy_socket_recv = []
 
-#Dictionary to store multiple addresses
+client_sockets_list = []   # List of all slient sockets (including server socket)
 client_addresses = {} # {socket : addr}
 client_ports = {} #{socket : port}
+client_dependency = {} #{message: [clients]}
 
+server_sockets_list = []
+client_addresses = {} # {socket : addr}
 #Start the server
+#handles connections from peers
 def start_server():
     
     sockets_list = []   # List of all sockets (including server socket)
@@ -36,17 +39,31 @@ def start_server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
     server_socket.bind((HOST, PORT))
     server_socket.listen(4)     #Listen for incoming connections
-    sockets_list.append(server_socket)
     server_socket.setblocking(False)
-    print(f"Server starting on {HOST}:{Selfport}")
+    sockets_list.append(server_socket)
+    print(f"Server starting on {HOST}:{PORT}")
 
     #using select to manage the sockets
     while True:
         readable, writable, exceptional = select.select(sockets_list, sockets_list, sockets_list)
-        pass
+
+        for current_socket in readable:
+            if current_socket == self_socket: #establish new connections
+
+                peer_socket, peer_address = self_socket.accept()
+                print(f"Connected by {peer_address}")
+                socket_addr[peer_socket] = peer_address
+
+                #Set the client socket to non-blocking and add to monitoring list
+                peer_socket.setblocking(True)
+                sockets_list.append(peer_socket)
+            else:
+                pass
 
 
-#Connects to the server socket
+
+
+#Connects to the other servers
 def connect_to_server():
     # Create a socket (TCP/IP)
     close_flag = True # flag for if the program closes
@@ -90,7 +107,6 @@ def send(client_socket, message):
     except ConnectionError as e:
         close_socket(client_socket)
 
-
 #Receive commands from the client
 def recv(client_socket):
     try:
@@ -133,111 +149,14 @@ def recv(client_socket):
         #Handle client disconnection
         close_socket(client_socket)
 
-    
+def write():
+    pass
+
+def read():
+    pass
 
 def register(client_socket):
     pass
-
-def chunk_register(client_socket):
-    file_name = (client_socket.recv(1024)).decode('utf-8')                  #recvs filename
-    send_confirmation(client_socket)
-    chunk_num = int.from_bytes(client_socket.recv(8), byteorder='big')
-    file_size = int.from_bytes(client_socket.recv(8), byteorder='big')   #file size
-    client_port = int.from_bytes(client_socket.recv(8), byteorder='big') #the port of the client
-
-    client_ports[client_socket] = client_port
-    #register new file or adds the user as a file holder
-    if file_name in files:
-        files[file_name].chunk_register(client_port, chunk_num)
-    else:
-        newfile = File(file_name, file_size, client_port)
-        newfile.chunk_register(client_port, chunk_num)
-        files[file_name] = newfile
-        print("New file: ", file_name)
-
-#sends the user the info of where to get download from
-def send_download_info(client_socket, file_name):
-    client_socket.sendall(DEFAULT_CHUNK_SIZE.to_bytes(8, byteorder='big'))
-    num_of_chunks = files[file_name].get_num_of_chunks()
-    client_socket.sendall(num_of_chunks.to_bytes(8, byteorder='big'))
-    print(f"download info sent to {client_addresses[client_socket]}")
-
-#receives a file
-def receive_file(client_socket, file_name):
-    #Receive the file size from the server
-    file_size_data = client_socket.recv(8)  #Expecting 8 bytes for file size
-    file_size = int.from_bytes(file_size_data, byteorder='big')
-    print(f"Receiving file of size: {file_size} bytes")
-
-    #Start receiving the file in chunks
-    received_size = 0   #total data received
-
-    with open(file_name, 'wb') as file:
-        while received_size < file_size:
-            remaining_size = file_size - received_size
-            chunk_size = min(1024, remaining_size)
-            chunk = client_socket.recv(chunk_size)
-            
-            if not chunk:  #Connection closed before the expected file size
-                break
-
-            file.write(chunk)
-            received_size += len(chunk)
-
-            print(f"Received {received_size}/{file_size} bytes")
-
-    if received_size == file_size:
-        print(f"File {file_name} received successfully")
-
-        #chunks = split_file_into_chunks(file_name, DEFAULT_CHUNK_SIZE)
-        newfile = File(file_name, file_size, client_addresses[client_socket])
-        files[file_name] = newfile
-    else:
-        print(f"Error: received only {received_size}/{file_size} bytes")
-
-
-def send_file_location(client_socket, file_name):
-
-    #check if its in the archived file
-    if (file_name in files):
-        file_locations = files[file_name].get_file_locations()
-
-        #converts the integers to strings
-        str_list = []
-        for num in file_locations:
-            str_list.append(str(num))
-
-        data_list = ','.join(str_list)
-        client_socket.sendall(data_list.encode('utf-8'))
-        print("Sending location")
-    else:               #no files with this name exists
-        client_socket.sendall("NULL".encode('utf-8'))
-        print("Not a valid file name")        
-
-def send_list_of_files(client_socket):
-    file_list = list(files.keys())
-    num_of_files = len(file_list)
-
-    out=[f"Number of files: {num_of_files}"]
-    
-    for file in file_list:
-        out.append(f"File Name: {file} Size of file: {files[file].file_size}")
-    
-    data_list = ';'.join(out)
-    data = data_list.encode('utf-8')
-    client_socket.sendall(data)
-
-# Send chunk data and hash
-def send_chunk(client_socket, file_name, chunk_num):
-    file = files[file_name]
-    chunk_hash = file.get_chunk_hash(chunk_num)
-    
-    with open(file_name, 'rb') as f:
-        f.seek(chunk_num * DEFAULT_CHUNK_SIZE)
-        chunk = f.read(DEFAULT_CHUNK_SIZE)
-        client_socket.sendall(chunk)  # Send chunk data
-        client_socket.sendall(chunk_hash.encode('utf-8'))  # Send chunk hash
-        print(f"Sent chunk {chunk_num} and hash {chunk_hash} to {client_addresses[client_socket]}")
 
 
 #Close the server and all client connections
