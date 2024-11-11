@@ -13,11 +13,8 @@ file_name = [] #current stores the file name since the file will be stored local
 SELFHOST = HOST         #client ip address
 
 files = {}   #{file_name: {chunks}}, file is added when calling register
-DEFAULT_CHUNK_SIZE = 4096
-threads = []
 Selfport = 0
 
- 
 
 #Connects to the server socket
 def connect_to_server():

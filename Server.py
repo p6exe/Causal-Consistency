@@ -8,6 +8,9 @@ is read a input from the user or an automatic operation on the client?
 is it just messages that we are sending?
 how does read work?
 
+maybe setup a master server?
+connect sever with servers
+
 '''
 
 
@@ -24,15 +27,14 @@ busy_socket_recv = []
 client_addresses = {} # {socket : addr}
 client_ports = {} #{socket : port}
 
-
 #Start the server
-def start_server(Selfport):
+def start_server():
     
     sockets_list = []   # List of all sockets (including server socket)
     socket_addr = {} 
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
-    server_socket.bind((HOST, Selfport))
+    server_socket.bind((HOST, PORT))
     server_socket.listen(4)     #Listen for incoming connections
     sockets_list.append(server_socket)
     server_socket.setblocking(False)
@@ -104,10 +106,6 @@ def recv(client_socket):
         if(message == "register"):
             #filename = client_socket.recv(1024)
             register(client_socket)
-        #closes
-        elif(message == "chunk register"):
-            #filename = client_socket.recv(1024)
-            chunk_register(client_socket)
         elif(message == "close"):
             close_socket(client_socket)
         elif(message == "file list"):
@@ -276,4 +274,8 @@ def debugger(client_socket):
     print("using ", client_socket)
 
 if __name__ == '__main__':
-    start_server()
+    PORT = int(input("User port (0 - 65535): " ))
+    thread1 = threading.Thread(target=connect_to_server)
+    thread2 = threading.Thread(target=start_server)
+    thread2.start()
+    thread1.start()
