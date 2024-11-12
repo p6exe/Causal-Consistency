@@ -22,6 +22,11 @@ how does read work?
 
 '''
 
+'''
+class Client:
+    def __init__(self):
+        dependency_list = []
+'''
 
 HOST = '127.0.0.1'  # Localhost
 PORT = 58008        # Port 
@@ -71,9 +76,9 @@ def start_server():
 
                 handler = (current_socket.recv(1024)).decode('utf-8')
                 if(handler == "server"):
-                    establish_new_server()
+                    server_sockets_list.append(peer_socket)
                 elif (handler == "client"):
-                    client_handler(current_socket)
+                    client_sockets_list.append(peer_socket)
                 
             else:
                 handler = (current_socket.recv(1024)).decode('utf-8') 
@@ -82,8 +87,9 @@ def start_server():
                 elif (handler == "client"):
                     client_handler(current_socket)
 
-def establish_new_server():
+def new_server_connection():
     pass
+
 def connect_to_master():
     master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     master_socket.connect((HOST, PORT))  # Connect to the server
@@ -98,9 +104,16 @@ def connect_to_master():
 
 
 def server_handler(server_socket):
-    pass
+    while True:
+        readable, writable, exceptional = select.select(server_sockets_list, server_sockets_list, server_sockets_list)
+
+        for current_socket in readable:
+            
 def client_handler(client_socket):
-    pass
+    while True:
+        readable, writable, exceptional = select.select(client_sockets_list, client_sockets_list, client_sockets_list)
+
+        for current_socket in readable:
 
 
 #Connects to the other servers
@@ -140,11 +153,6 @@ def recv(client_socket):
         #takes in commands from the user:
         if(message == "close"):
             close_socket(client_socket)
-        elif(message == "file list"):
-            send_list_of_files(client_socket)
-        elif(message == "file location"):
-            file_name = client_socket.recv(1024).decode('utf-8')
-            send_file_location(client_socket, file_name)
         elif(message == "store hash"):
             file_name = client_socket.recv(1024).decode('utf-8')
             chunk_hashes = client_socket.recv(1024).decode('utf-8').split(',')
@@ -169,9 +177,6 @@ def write():
     pass
 
 def read():
-    pass
-
-def register(client_socket):
     pass
 
 
@@ -205,7 +210,9 @@ def debugger(client_socket):
 
 if __name__ == '__main__':
     PORT = int(input("User port (0 - 65535): " ))
-    thread1 = threading.Thread(target=connect_to_server)
-    thread2 = threading.Thread(target=start_server)
-    thread2.start()
+    thread1 = threading.Thread(target=start_server)
+    thread2 = threading.Thread(target=client_handler)
+    thread3 = threading.Thread(target=server_handler)
     thread1.start()
+    thread2.start()
+    thread3.start()
