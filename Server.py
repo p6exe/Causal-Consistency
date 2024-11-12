@@ -1,5 +1,6 @@
 import socket
 import select
+import threading
 import os
 
 
@@ -47,31 +48,46 @@ server_addresses = {} # {socket : addr}
 
 #Start the server
 def start_server():
-    
+
     connect_to_master()
     connect_to_server()
 
-    socket_addr = {} 
-    sockets_list = []
+def connect_to_master():
+    master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    master_socket.connect((HOST, MASTER_PORT))  # Connect to the server
     
-    self_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
-    self_socket.bind((HOST, PORT))
-    self_socket.listen(4)     #Listen for incoming connections
-    self_socket.setblocking(False)
-    sockets_list.append(self_socket)
+    #recv all other server ports
+    num_of_servers = int.from_bytes(master_socket.recv(1024), byteorder='big')
+    for i in range(num_of_servers):
+        server_sockets_list += [int.from_bytes(master_socket.recv(1024), byteorder='big')]
+
+    #send port to master
+    master_socket.sendall(PORT.to_bytes(8, byteorder='big'))
+
+    
+
+#reads from other server
+def server_handler():
+    global server_sockets_list
+    
+    self_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
+    server_sockets_list
+    self_server_socket.bind((HOST, PORT))
+    self_server_socket.listen(4)     #Listen for incoming connections
+    self_server_socket.setblocking(False)
+    server_sockets_list.append(self_server_socket)
     print(f"Server starting on {HOST}:{PORT}")
 
     #using select to manage the sockets
     while True:
-        readable, writable, exceptional = select.select(sockets_list, sockets_list, sockets_list)
+        readable, writable, exceptional = select.select(server_sockets_list, server_sockets_list, server_sockets_list)
 
         for current_socket in readable:
-            if current_socket == self_socket: #establish new connections
+            if current_socket == self_server_socket: #establish new connections
 
-                peer_socket, peer_address = self_socket.accept()
+                peer_socket, peer_address = self_server_socket.accept()
                 peer_socket.setblocking(True)
-                socket_addr[peer_socket] = peer_address
-                sockets_list.append(peer_socket)
+                server_sockets_list.append(peer_socket)
                 print(f"Connected by {peer_address}")
 
                 handler = (current_socket.recv(1024)).decode('utf-8')
@@ -79,41 +95,20 @@ def start_server():
                     server_sockets_list.append(peer_socket)
                 elif (handler == "client"):
                     client_sockets_list.append(peer_socket)
-                
             else:
-                handler = (current_socket.recv(1024)).decode('utf-8') 
-                if(handler == "server"):
-                    server_handler(current_socket)
-                elif (handler == "client"):
-                    client_handler(current_socket)
+                message = current_socket.recv(1024).decode('utf-8')
+                print("Server message: ", message)
 
-def new_server_connection():
-    pass
-
-def connect_to_master():
-    master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    master_socket.connect((HOST, PORT))  # Connect to the server
-    
-    #send port to master
-    master_socket.sendall(PORT.to_bytes(8, byteorder='big'))
-
-    #recv all other server ports
-    num_of_servers = int.from_bytes(master_socket.recv(1024), byteorder='big')
-    for i in range(num_of_servers):
-        server_sockets_list += [int.from_bytes(master_socket.recv(1024), byteorder='big')]
-
-
-def server_handler(server_socket):
-    while True:
-        readable, writable, exceptional = select.select(server_sockets_list, server_sockets_list, server_sockets_list)
-
-        for current_socket in readable:
-            
-def client_handler(client_socket):
+#writes to this server
+#then broadcasts to other servers
+def client_handler():
+    global client_sockets_list
     while True:
         readable, writable, exceptional = select.select(client_sockets_list, client_sockets_list, client_sockets_list)
 
         for current_socket in readable:
+            client_command = current_socket.recv(1024).decode('utf-8')
+            print("Client operation: ", client_command)
 
 
 #Connects to the other servers
@@ -139,46 +134,11 @@ def send(client_socket, message):
     except ConnectionError as e:
         close_socket(client_socket)
 
-#Receive commands from the client
-def recv(client_socket):
-    try:
-        data = client_socket.recv(1024)
-        if data:
-            print(f"Received from {client_addresses[client_socket]}: {data.decode('utf-8')}")
-        else:
-            close_socket(client_socket)
-        
-        message = data.decode('utf-8')
-        message = message.strip()
-        #takes in commands from the user:
-        if(message == "close"):
-            close_socket(client_socket)
-        elif(message == "store hash"):
-            file_name = client_socket.recv(1024).decode('utf-8')
-            chunk_hashes = client_socket.recv(1024).decode('utf-8').split(',')
-            files[file_name].store_hashes(chunk_hashes)
-        elif(message == "verify chunk"):
-            send_confirmation(client_socket)
-            file_name = client_socket.recv(1024).decode('utf-8')
-            chunk_num = int.from_bytes(client_socket.recv(8), byteorder='big')
-            print(chunk_num)
-            hash = files[file_name].get_hash(chunk_num)
-            print(hash)
-            client_socket.sendall(hash.encode('utf-8'))
-            print("sending verify hash")
-        elif(message == "download"):
-            file_name = client_socket.recv(1024).decode('utf-8')
-            send_download_info(client_socket, file_name)
-    except ConnectionError as e:
-        #Handle client disconnection
-        close_socket(client_socket)
-
 def write():
     pass
 
 def read():
     pass
-
 
 #Close the server and all client connections
 def close_server(server_socket):

@@ -11,7 +11,7 @@ HOST = '127.0.0.1'  # Localhost
 PORT = 58008        # Port 
 
 server_addresses = {}   # {socket : addr}
-server_ports = []       # [ports]
+server_ports = {}       # {socket : ports}
 sockets_list = []       # List of all sockets (including master socket)
 
 #Start the server
@@ -47,24 +47,29 @@ def start_server():
 
 #handles when new servers are added
 def new_server_added(client_socket):
-    #recvs the port
-    server_port = int.from_bytes(client_socket.recv(1024), byteorder='big')
-    server_ports += [server_port]
-
+    global server_ports
+    
     #send all ports
     length = len(server_ports)
     client_socket.sendall(length.to_bytes(8, byteorder='big'))
-    for port in server_ports:
+    for port in (server_ports.values()):
         client_socket.sendall(port.to_bytes(8, byteorder='big'))
     
     print(f"New Server {server_port}")
     print("list of servers: ", server_ports)
+
+    #recvs the port
+    server_port = int.from_bytes(client_socket.recv(1024), byteorder='big')
+    server_ports[client_socket] = [server_port]
+
+    
 
 def close_socket(server_socket):
     server_socket.shutdown(socket.SHUT_RDWR)
     server_socket.close()
     print(f"Server {server_addresses[server_socket]} disconnected")
     sockets_list.remove(server_socket)
+    del server_ports[server_socket]
     del server_addresses[server_socket]
 
 if __name__ == '__main__':
