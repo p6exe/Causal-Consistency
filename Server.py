@@ -8,10 +8,18 @@ is read a input from the user or an automatic operation on the client?
 is it just messages that we are sending?
 how does read work?
 
-maybe setup a master server?
-connect server with servers
-allow clients to connect
-send writes to other servers
+ - maybe setup a master server?
+ - connect server with servers
+ - allow clients to connect
+ - recv reads and writes from clients
+ - send writes to other servers
+
+ dependency lists/recving from other servers
+ - add a delaying function
+ - add a individual depedency list for messages
+ - print out recvs
+
+
 '''
 
 
@@ -29,6 +37,7 @@ client_dependency = {} #{message: [clients]}
 
 server_sockets_list = []
 client_addresses = {} # {socket : addr}
+
 #Start the server
 #handles connections from peers
 def start_server():
@@ -59,8 +68,6 @@ def start_server():
                 sockets_list.append(peer_socket)
             else:
                 pass
-
-
 
 
 #Connects to the other servers
