@@ -30,7 +30,7 @@ class Client:
 '''
 
 HOST = '127.0.0.1'  # Localhost
-PORT = 58008        # Port 
+PORT = 58008        # Port and Port + 1 will be used for client server connections
 MASTER_PORT = 58008
 
 messages = {}
@@ -71,11 +71,10 @@ def server_handler():
     global server_sockets_list
     
     self_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
-    server_sockets_list
+    server_sockets_list.append(self_server_socket)
     self_server_socket.bind((HOST, PORT))
     self_server_socket.listen(4)     #Listen for incoming connections
     self_server_socket.setblocking(False)
-    server_sockets_list.append(self_server_socket)
     print(f"Server starting on {HOST}:{PORT}")
 
     #using select to manage the sockets
@@ -91,10 +90,6 @@ def server_handler():
                 print(f"Connected by {peer_address}")
 
                 handler = (current_socket.recv(1024)).decode('utf-8')
-                if(handler == "server"):
-                    server_sockets_list.append(peer_socket)
-                elif (handler == "client"):
-                    client_sockets_list.append(peer_socket)
             else:
                 message = current_socket.recv(1024).decode('utf-8')
                 print("Server message: ", message)
@@ -103,12 +98,26 @@ def server_handler():
 #then broadcasts to other servers
 def client_handler():
     global client_sockets_list
+
+    client_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
+    client_sockets_list.append(client_server_socket)
+    client_server_socket.bind((HOST, PORT))
+    client_server_socket.listen(4)     #Listen for incoming connections
+    client_server_socket.setblocking(False)
+    print(f"client server starting on {HOST}:{PORT + 1}")
+
     while True:
         readable, writable, exceptional = select.select(client_sockets_list, client_sockets_list, client_sockets_list)
 
         for current_socket in readable:
-            client_command = current_socket.recv(1024).decode('utf-8')
-            print("Client operation: ", client_command)
+            if current_socket == client_server_socket: #establish new connections
+                peer_socket, peer_address = client_server_socket.accept()
+                peer_socket.setblocking(True)
+                client_sockets_list.append(peer_socket)
+                print(f"Connected by {peer_address}")
+            else:
+                client_command = current_socket.recv(1024).decode('utf-8')
+                print("Client operation: ", client_command)
 
 
 #Connects to the other servers
