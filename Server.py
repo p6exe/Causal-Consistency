@@ -31,20 +31,24 @@ messages = {}
 send_buffer = {}    # Buffers that stores the sockets that need a reply after they request
 
 client_sockets_list = []   # List of all slient sockets (including server socket)
-client_addresses = {}   # {socket : addr}
 client_ports = []       #[port]
 client_dependency = {}  #{message: [clients]}
+client_addresses = {}   # {socket : addr}
 
-server_sockets_list = []
+server_sockets_list = []    #[socket]
+server_ports = []           #[port]
 server_addresses = {} # {socket : addr}
 
+
 #Start the server
-#handles connections from peers
 def start_server():
     
     connect_to_master()
-    socket_addr = {} 
+    connect_to_server()
 
+    socket_addr = {} 
+    sockets_list = []
+    
     self_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
     self_socket.bind((HOST, PORT))
     self_socket.listen(4)     #Listen for incoming connections
@@ -60,12 +64,17 @@ def start_server():
             if current_socket == self_socket: #establish new connections
 
                 peer_socket, peer_address = self_socket.accept()
-                print(f"Connected by {peer_address}")
-                socket_addr[peer_socket] = peer_address
-
-                #Set the client socket to non-blocking and add to monitoring list
                 peer_socket.setblocking(True)
+                socket_addr[peer_socket] = peer_address
                 sockets_list.append(peer_socket)
+                print(f"Connected by {peer_address}")
+
+                handler = (current_socket.recv(1024)).decode('utf-8')
+                if(handler == "server"):
+                    establish_new_server()
+                elif (handler == "client"):
+                    client_handler(current_socket)
+                
             else:
                 handler = (current_socket.recv(1024)).decode('utf-8') 
                 if(handler == "server"):
@@ -73,7 +82,8 @@ def start_server():
                 elif (handler == "client"):
                     client_handler(current_socket)
 
-
+def establish_new_server():
+    pass
 def connect_to_master():
     master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     master_socket.connect((HOST, PORT))  # Connect to the server
@@ -84,40 +94,24 @@ def connect_to_master():
     #recv all other server ports
     num_of_servers = int.from_bytes(master_socket.recv(1024), byteorder='big')
     for i in range(num_of_servers):
-        server_sockets_list
+        server_sockets_list += [int.from_bytes(master_socket.recv(1024), byteorder='big')]
 
 
 def server_handler(server_socket):
     pass
-def client_handler():
+def client_handler(client_socket):
     pass
 
 
 #Connects to the other servers
 def connect_to_server():
-    # Create a socket (TCP/IP)
-    close_flag = True # flag for if the program closes
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.connect((HOST, PORT))  # Connect to the server
+    #connect to all servers
+    for port in server_ports:
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.connect((HOST, port))  # Connect to the server
+        server_sockets_list += [server_socket]
+        print(f"connecting to server {HOST}:{port}")
 
-    print(f"client connecting to server {HOST}:{PORT}")
-
-    # Receive a response from the server
-    while(close_flag == True):
-        commands = []
-        print("Commands: ",commands)
-        command = input("command: ").lower()
-
-        if(command == "recv"): 
-            recv(server_socket)
-        elif(command == "send"):
-            message = input("message: ")
-            send(server_socket, message)
-        elif(command == "close"):
-            close_server(server_socket)
-            close_flag = False
-        else:
-            print("not a valid command: ",commands)
 
 #Send a message to a specific client
 def send(client_socket, message):
@@ -144,10 +138,7 @@ def recv(client_socket):
         message = data.decode('utf-8')
         message = message.strip()
         #takes in commands from the user:
-        if(message == "register"):
-            #filename = client_socket.recv(1024)
-            register(client_socket)
-        elif(message == "close"):
+        if(message == "close"):
             close_socket(client_socket)
         elif(message == "file list"):
             send_list_of_files(client_socket)
