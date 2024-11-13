@@ -61,7 +61,7 @@ def new_server_added(client_socket):
     server_ports[client_socket] = server_port
 
     print(f"New Server {server_port}")
-    print("list of servers: ", server_ports)
+    print("list of servers: ", server_ports.values())
 
     
 

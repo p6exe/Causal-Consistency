@@ -24,22 +24,26 @@ how does read work?
 '''
 
 '''
-class Client:
+class Message_Info:
     def __init__(self):
-        dependency_list = []
+        self.time = time
+        self.centerID = centerID
+        self.message
+        #(z, message)
 '''
 
 HOST = '127.0.0.1'  # Localhost
-SERVER_PORT = 58008        # Port and Port + 1 will be used for client server connections
+SERVER_PORT = 58008        # Port for server connections and Port + 1 will be used for client server connections
 SERVER_CLIENT_PORT = 0
-MASTER_PORT = 58008
+MASTER_PORT = 58008         # Master port to retrieve other server ports
 
 client_dependency = {}  # {clientaddr: messageID}
 messages = {}           # {messageID, message}
-delay_message = []
+pending_writes = {}     # {dependency_messageID, [messageID, message]}
+pending_reads = {}      # {dependency_messageID, [messageID, message, client_socket]}
+delay_message = {}      # {dependency_messageID, [messageID, message]}
 
 client_sockets_list = []    # List of all slient sockets (including server socket)
-client_ports = []           # [port]
 client_addresses = {}       # {socket : addr}
 
 server_sockets_list = []    # [socket]
@@ -80,7 +84,6 @@ def connect_to_server():
         server_sockets_list.append(server_socket)
         print(f"connecting to server {HOST}:{port}")
 
-    
 
 #reads from other server
 def server_handler():
@@ -106,8 +109,27 @@ def server_handler():
                 server_addresses[peer_socket] = peer_address
                 print(f"Connected by server: {peer_address}")
             else:
-                message = current_socket.recv(1024).decode('utf-8')
-                print("Server message: ", message)
+                data = current_socket.recv(1024)
+                if data:
+                    print(f"Received from {client_addresses[current_socket]}: {data.decode('utf-8')}")
+                else:
+                    close_socket(current_socket)
+                
+                delay() #delay the commit
+
+                #receives message from other server
+                dependency_messageID = current_socket.recv(1024).decode('utf-8')
+                messageID = current_socket.recv(1024).decode('utf-8')
+                message.decode('utf-8')
+
+                #save locally
+                pending_writes[dependency_check] = [messageID, message]
+                print("buffer operations: ", buffer_operation)
+
+                #dependency check on the buffer
+                dependency_check()
+
+                print(f"Received replicated write from server: ({messageID},{message}) with dependency on {dependency_messageID}")
 
 #writes to this server
 #then broadcasts to other servers
@@ -133,41 +155,57 @@ def client_handler():
                 client_sockets_list.append(peer_socket)
                 client_addresses[peer_socket] = peer_address
                 print(f"Connected by client: {peer_address}")
+
             else:
                 #handles client to server commands and broadcasts to other servers
 
                 data = current_socket.recv(1024)
                 if data:
                     print(f"Received from {client_addresses[current_socket]}: {data.decode('utf-8')}")
-                else:
-                    close_socket(current_socket)
 
                 client_command = data.decode('utf-8')
-                print("Client operation: ", client_command)
                 if(client_command == "read"):
+                    print("Client operation: ", client_command)
                     read(current_socket)
                 elif(client_command == "write"):
+                    print("Client operation: ", client_command)
                     write(current_socket)
 
 #takes the user write then broadcasts to all other servers
 def write(client_socket):
     messageID = client_socket.recv(1024).decode('utf-8')
     message = client_socket.recv(1024).decode('utf-8')
-    print(f"Client writes: <{messageID},{message}>")
     
     #saving to local server
+    dependency_messageID = "None"
+    if(client_addr in client_dependency):
+        dependency_messageID = client_dependency[client_addr]
     client_addr = client_addresses[client_socket]
     client_dependency[client_addr] = messageID
     messages[messageID] = message
-    print("message: ", messages)
+
+    print(f"Client writes: ({messageID},{message}) with dependency on {dependency_messageID}")
+    print("messages: ", messages)
 
     #broadcasting to other servers
     for current_socket in server_sockets_list:
         print(f"sending message <{messageID},{message}> to {server_addresses[current_socket]}")
+        current_socket.sendall(dependency_messageID.encode('utf-8'))
+        current_socket.sendall(messageID.encode('utf-8'))
         current_socket.sendall(message.encode('utf-8'))
 
-#gives the read to the user
+
+#updates the dependency list and returns the key to the user
 def read(client_socket):
+    messageID = client_socket.recv(1024).decode('utf-8')
+    if messageID in messages:
+        message = messages[messageID]
+        client_socket.sendall(message.encode('utf-8'))
+
+
+
+#adds all message that can be written
+def dependency_check():
     pass
 
 def delay():
@@ -182,8 +220,11 @@ def close_server(server_socket):
     print("Server closed.")
 
 
+def close_server_socket():
+    pass
+
 #handles closing sockets
-def close_socket(client_socket, server_socket):
+def close_client_socket(client_socket, server_socket):
     client_socket.shutdown(socket.SHUT_RDWR)
     client_socket.close()
     print(f"Client {client_addresses[client_socket]} disconnected")

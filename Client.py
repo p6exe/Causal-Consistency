@@ -38,13 +38,20 @@ def connect_to_server():
 
 
 #Send a message to the server
-def write(server_socket, message):
+def write(server_socket):
+    server_socket.sendall("write".encode('utf-8'))
+    messageID = input("enter the key: ")
+    message = input("enter the message: ")
+    server_socket.sendall(messageID.encode('utf-8'))  # Send the message encoded
     server_socket.sendall(message.encode('utf-8'))  # Send the message encoded
 
 #Receive message from server
 def read(server_socket):
-    command = server_socket.recv(1024).decode('utf-8')
-    print(f"Received from server: {command}")
+    server_socket.sendall("read".encode('utf-8'))
+    messageID = input("enter the key: ")
+    server_socket.sendall(messageID.encode('utf-8'))
+    message = server_socket.recv(1024).decode('utf-8')
+    print(f"Received from server: {message}")
     #send(server_socket, "Message received!")  # Send acknowledgment
 
 def send_confirmation(client_socket):
