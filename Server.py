@@ -125,14 +125,24 @@ def client_handler():
         readable, writable, exceptional = select.select(client_sockets_list, client_sockets_list, client_sockets_list)
 
         for current_socket in readable:
-            if current_socket == client_server_socket: #establish new connections
+            if current_socket == client_server_socket: 
+                #establish new connections
+                
                 peer_socket, peer_address = client_server_socket.accept()
                 peer_socket.setblocking(True)
                 client_sockets_list.append(peer_socket)
                 client_addresses[peer_socket] = peer_address
                 print(f"Connected by client: {peer_address}")
             else:
-                client_command = current_socket.recv(1024).decode('utf-8')
+                #handles client to server commands and broadcasts to other servers
+
+                data = current_socket.recv(1024)
+                if data:
+                    print(f"Received from {client_addresses[current_socket]}: {data.decode('utf-8')}")
+                else:
+                    close_socket(current_socket)
+
+                client_command = data.decode('utf-8')
                 print("Client operation: ", client_command)
                 if(client_command == "read"):
                     read(current_socket)
