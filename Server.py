@@ -34,17 +34,17 @@ SERVER_PORT = 58008        # Port and Port + 1 will be used for client server co
 SERVER_CLIENT_PORT = 0
 MASTER_PORT = 58008
 
-messages = {}
-send_buffer = {}    # Buffers that stores the sockets that need a reply after they request
+client_dependency = {}  # {clientaddr: messageID}
+messages = {}           # {messageID, message}
+delay_message = []
 
-client_sockets_list = []   # List of all slient sockets (including server socket)
-client_ports = []       #[port]
-client_dependency = {}  #{message: [clients]}
-client_addresses = {}   # {socket : addr}
+client_sockets_list = []    # List of all slient sockets (including server socket)
+client_ports = []           # [port]
+client_addresses = {}       # {socket : addr}
 
-server_sockets_list = []    #[socket]
-server_ports = []           #[port]
-server_addresses = {} # {socket : addr}
+server_sockets_list = []    # [socket]
+server_ports = []           # [port]
+server_addresses = {}       # {socket : addr}
 
 
 #Start the server
@@ -149,29 +149,34 @@ def client_handler():
                 elif(client_command == "write"):
                     write(current_socket)
 
-#Send a message to a specific client
-def send(client_socket, message):
-    try:
-        print(client_socket)
-        client_socket.sendall(message.encode('utf-8'))
-        print(f"sent to {client_addresses[client_socket]}: {message}")
-
-        if client_socket in send_buffer:
-            del send_buffer[client_socket]
-        
-    except ConnectionError as e:
-        close_socket(client_socket)
-
+#takes the user write then broadcasts to all other servers
 def write(client_socket):
+    messageID = client_socket.recv(1024).decode('utf-8')
+    message = client_socket.recv(1024).decode('utf-8')
+    print(f"Client writes: <{messageID},{message}>")
+    
+    #saving to local server
+    client_addr = client_addresses[client_socket]
+    client_dependency[client_addr] = messageID
+    messages[messageID] = message
+    print("message: ", messages)
+
+    #broadcasting to other servers
+    for current_socket in server_sockets_list:
+        print(f"sending message <{messageID},{message}> to {server_addresses[current_socket]}")
+        current_socket.sendall(message.encode('utf-8'))
+
+#gives the read to the user
+def read(client_socket):
     pass
 
-def read(client_socket):
+def delay():
     pass
 
 #Close the server and all client connections
 def close_server(server_socket):
     print("Closing server and all client connections.")
-    for addr, client_socket in client_addresses.items():
+    for client_socket in client_addresses.values():
         client_socket.close()  #Close each client socket
     server_socket.close()  #Close the server socket
     print("Server closed.")
@@ -179,9 +184,6 @@ def close_server(server_socket):
 
 #handles closing sockets
 def close_socket(client_socket, server_socket):
-    if client_socket in send_buffer:
-        del send_buffer[client_socket]
-
     client_socket.shutdown(socket.SHUT_RDWR)
     client_socket.close()
     print(f"Client {client_addresses[client_socket]} disconnected")
