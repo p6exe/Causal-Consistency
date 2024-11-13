@@ -30,7 +30,8 @@ class Client:
 '''
 
 HOST = '127.0.0.1'  # Localhost
-PORT = 58008        # Port and Port + 1 will be used for client server connections
+SERVER_PORT = 58008        # Port and Port + 1 will be used for client server connections
+SERVER_CLIENT_PORT = 0
 MASTER_PORT = 58008
 
 messages = {}
@@ -52,17 +53,32 @@ def start_server():
     connect_to_master()
     connect_to_server()
 
+
 def connect_to_master():
+    global server_ports
+
     master_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     master_socket.connect((HOST, MASTER_PORT))  # Connect to the server
     
     #recv all other server ports
     num_of_servers = int.from_bytes(master_socket.recv(1024), byteorder='big')
     for i in range(num_of_servers):
-        server_sockets_list += [int.from_bytes(master_socket.recv(1024), byteorder='big')]
+        server_ports += [int.from_bytes(master_socket.recv(1024), byteorder='big')]
 
     #send port to master
-    master_socket.sendall(PORT.to_bytes(8, byteorder='big'))
+    master_socket.sendall(SERVER_PORT.to_bytes(8, byteorder='big'))
+
+
+#Connects to the other servers
+def connect_to_server():
+    global server_sockets_list
+    #connect to all servers
+    print("server ports: ", server_ports)
+    for port in server_ports:
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.connect((HOST, port))  # Connect to the server
+        server_sockets_list.append(server_socket)
+        print(f"connecting to server {HOST}:{port}")
 
     
 
@@ -72,10 +88,10 @@ def server_handler():
     
     self_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
     server_sockets_list.append(self_server_socket)
-    self_server_socket.bind((HOST, PORT))
+    self_server_socket.bind((HOST, SERVER_PORT))
     self_server_socket.listen(4)     #Listen for incoming connections
     self_server_socket.setblocking(False)
-    print(f"Server starting on {HOST}:{PORT}")
+    print(f"Server starting on {HOST}:{SERVER_PORT}")
 
     #using select to manage the sockets
     while True:
@@ -87,9 +103,8 @@ def server_handler():
                 peer_socket, peer_address = self_server_socket.accept()
                 peer_socket.setblocking(True)
                 server_sockets_list.append(peer_socket)
-                print(f"Connected by {peer_address}")
-
-                handler = (current_socket.recv(1024)).decode('utf-8')
+                server_addresses[peer_socket] = peer_address
+                print(f"Connected by server: {peer_address}")
             else:
                 message = current_socket.recv(1024).decode('utf-8')
                 print("Server message: ", message)
@@ -101,10 +116,10 @@ def client_handler():
 
     client_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
     client_sockets_list.append(client_server_socket)
-    client_server_socket.bind((HOST, PORT))
+    client_server_socket.bind((HOST, SERVER_CLIENT_PORT))
     client_server_socket.listen(4)     #Listen for incoming connections
     client_server_socket.setblocking(False)
-    print(f"client server starting on {HOST}:{PORT + 1}")
+    print(f"client server starting on {HOST}:{SERVER_CLIENT_PORT}")
 
     while True:
         readable, writable, exceptional = select.select(client_sockets_list, client_sockets_list, client_sockets_list)
@@ -114,20 +129,11 @@ def client_handler():
                 peer_socket, peer_address = client_server_socket.accept()
                 peer_socket.setblocking(True)
                 client_sockets_list.append(peer_socket)
-                print(f"Connected by {peer_address}")
+                client_addresses[peer_socket] = peer_address
+                print(f"Connected by client: {peer_address}")
             else:
                 client_command = current_socket.recv(1024).decode('utf-8')
                 print("Client operation: ", client_command)
-
-
-#Connects to the other servers
-def connect_to_server():
-    #connect to all servers
-    for port in server_ports:
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.connect((HOST, port))  # Connect to the server
-        server_sockets_list += [server_socket]
-        print(f"connecting to server {HOST}:{port}")
 
 
 #Send a message to a specific client
@@ -178,7 +184,8 @@ def debugger(client_socket):
     print("using ", client_socket)
 
 if __name__ == '__main__':
-    PORT = int(input("User port (0 - 65535): " ))
+    SERVER_PORT = int(input("User port (0 - 65535): " ))
+    SERVER_CLIENT_PORT = SERVER_PORT + 1
     thread1 = threading.Thread(target=start_server)
     thread2 = threading.Thread(target=client_handler)
     thread3 = threading.Thread(target=server_handler)

@@ -5,7 +5,7 @@ import os
 import hashlib
 
 HOST = '127.0.0.1'  #The server's hostname or IP address
-PORT = 58008        #The port used by the server
+PORT = 58009        #The port used by the server
 
 file_name = [] #current stores the file name since the file will be stored locally
 
@@ -13,13 +13,13 @@ file_name = [] #current stores the file name since the file will be stored local
 SELFHOST = HOST         #client ip address
 
 files = {}   #{file_name: {chunks}}, file is added when calling register
-Selfport = 0
 
 
 #Connects to the server socket
 def connect_to_server():
     # Create a socket (TCP/IP)
     close_flag = True # flag for if the program closes
+    Server_port = int(input("Server port (0 - 65535): " ))                          #################
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.connect((HOST, PORT))  # Connect to the server
 

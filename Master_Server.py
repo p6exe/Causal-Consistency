@@ -38,29 +38,30 @@ def start_server():
                 server_addresses[server_socket] = server_address
                 server_socket.setblocking(True)                                  #doesn't work
                 sockets_list.append(server_socket)
-            else:
                 try:
-                    new_server_added(current_socket)
+                    new_server_added(server_socket)
                 except ConnectionError as e:
-                    #Handle server disconnection
-                    close_socket(current_socket)
+                    #Handle client disconnection
+                    close_socket(server_socket)
+            
 
 #handles when new servers are added
 def new_server_added(client_socket):
     global server_ports
-    
+
     #send all ports
     length = len(server_ports)
     client_socket.sendall(length.to_bytes(8, byteorder='big'))
     for port in (server_ports.values()):
+        print(port)
         client_socket.sendall(port.to_bytes(8, byteorder='big'))
-    
-    print(f"New Server {server_port}")
-    print("list of servers: ", server_ports)
 
     #recvs the port
     server_port = int.from_bytes(client_socket.recv(1024), byteorder='big')
-    server_ports[client_socket] = [server_port]
+    server_ports[client_socket] = server_port
+
+    print(f"New Server {server_port}")
+    print("list of servers: ", server_ports)
 
     
 
@@ -68,6 +69,7 @@ def close_socket(server_socket):
     server_socket.shutdown(socket.SHUT_RDWR)
     server_socket.close()
     print(f"Server {server_addresses[server_socket]} disconnected")
+    print("list of servers: ", server_ports)
     sockets_list.remove(server_socket)
     del server_ports[server_socket]
     del server_addresses[server_socket]
