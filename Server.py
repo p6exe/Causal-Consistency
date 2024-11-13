@@ -106,7 +106,7 @@ def server_handler():
                 peer_socket, peer_address = self_server_socket.accept()
                 peer_socket.setblocking(True)
                 server_sockets_list.append(peer_socket)
-                server_addresses[peer_socket] = peer_address
+                #server_addresses[peer_socket] = peer_address
                 print(f"Connected by server: {peer_address}")
             else:
                 data = current_socket.recv(1024)
@@ -178,18 +178,21 @@ def write(client_socket):
     
     #saving to local server
     dependency_messageID = "None"
+    client_addr = client_addresses[client_socket]
     if(client_addr in client_dependency):
         dependency_messageID = client_dependency[client_addr]
-    client_addr = client_addresses[client_socket]
     client_dependency[client_addr] = messageID
     messages[messageID] = message
 
     print(f"Client writes: ({messageID},{message}) with dependency on {dependency_messageID}")
     print("messages: ", messages)
 
+    print("serverskkkkkkkkkkkkkkkkkkkkkkkkkkkkkk: ", server_sockets_list)
+
     #broadcasting to other servers
     for current_socket in server_sockets_list:
-        print(f"sending message <{messageID},{message}> to {server_addresses[current_socket]}")
+        #print("server_addresses: ", server_addresses)
+        print(f"sending message <{messageID},{message}>")
         current_socket.sendall(dependency_messageID.encode('utf-8'))
         current_socket.sendall(messageID.encode('utf-8'))
         current_socket.sendall(message.encode('utf-8'))
