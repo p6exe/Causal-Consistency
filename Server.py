@@ -134,7 +134,10 @@ def client_handler():
             else:
                 client_command = current_socket.recv(1024).decode('utf-8')
                 print("Client operation: ", client_command)
-
+                if(client_command == "read"):
+                    read(current_socket)
+                elif(client_command == "write"):
+                    write(current_socket)
 
 #Send a message to a specific client
 def send(client_socket, message):
@@ -149,10 +152,10 @@ def send(client_socket, message):
     except ConnectionError as e:
         close_socket(client_socket)
 
-def write():
+def write(client_socket):
     pass
 
-def read():
+def read(client_socket):
     pass
 
 #Close the server and all client connections
