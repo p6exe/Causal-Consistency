@@ -46,6 +46,7 @@ delay_message = {}      # {dependency_messageID, [messageID, message]}
 client_sockets_list = []    # List of all slient sockets (including server socket)
 client_addresses = {}       # {socket : addr}
 
+self_server_socket = ""     # the socket of the local server
 server_sockets_list = []    # [socket]
 server_ports = []           # [port]
 server_addresses = {}       # {socket : addr}
@@ -53,6 +54,15 @@ server_addresses = {}       # {socket : addr}
 
 #Start the server
 def start_server():
+    global self_server_socket
+    global server_sockets_list
+
+    self_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
+    self_server_socket.bind((HOST, SERVER_PORT))
+    server_sockets_list.append(self_server_socket)
+    self_server_socket.listen(4)     #Listen for incoming connections
+    self_server_socket.setblocking(False)
+    print(f"Server starting on {HOST}:{SERVER_PORT}")
 
     connect_to_master()
     connect_to_server()
@@ -88,18 +98,11 @@ def connect_to_server():
 #reads from other server
 def server_handler():
     global server_sockets_list
-    
-    self_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
-    server_sockets_list.append(self_server_socket)
-    self_server_socket.bind((HOST, SERVER_PORT))
-    self_server_socket.listen(4)     #Listen for incoming connections
-    self_server_socket.setblocking(False)
-    print(f"Server starting on {HOST}:{SERVER_PORT}")
+    global self_server_socket
 
     #using select to manage the sockets
     while True:
         readable, writable, exceptional = select.select(server_sockets_list, server_sockets_list, server_sockets_list)
-
         for current_socket in readable:
             if current_socket == self_server_socket: #establish new connections
 
@@ -111,25 +114,27 @@ def server_handler():
             else:
                 data = current_socket.recv(1024)
                 if data:
-                    print(f"Received from {client_addresses[current_socket]}: {data.decode('utf-8')}")
+                    print(f"Received from {current_socket}: {data.decode('utf-8')}")
                 else:
                     close_socket(current_socket)
+                operation = data.decode('utf-8')
                 
-                delay() #delay the commit
+                if(operation == "write"):
+                    #receives message from other server
+                    dependency_messageID = current_socket.recv(1024).decode('utf-8')
+                    current_socket.sendall("confirmation".encode('utf-8'))
+                    messageID = current_socket.recv(1024).decode('utf-8')
+                    current_socket.sendall("confirmation".encode('utf-8'))
+                    message = current_socket.recv(1024).decode('utf-8')
+                    current_socket.sendall("confirmation".encode('utf-8'))
 
-                #receives message from other server
-                dependency_messageID = current_socket.recv(1024).decode('utf-8')
-                messageID = current_socket.recv(1024).decode('utf-8')
-                message.decode('utf-8')
+                    #add to buffer of writes
+                    pending_writes[dependency_check] = [messageID, message]
 
-                #save locally
-                pending_writes[dependency_check] = [messageID, message]
-                print("buffer operations: ", buffer_operation)
+                    #dependency check on the buffer/commit the data
+                    dependency_check()
 
-                #dependency check on the buffer
-                dependency_check()
-
-                print(f"Received replicated write from server: ({messageID},{message}) with dependency on {dependency_messageID}")
+                    print(f"Received replicated write from server: ({messageID},{message}) with dependency on {dependency_messageID}")
 
 #writes to this server
 #then broadcasts to other servers
@@ -137,8 +142,8 @@ def client_handler():
     global client_sockets_list
 
     client_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Create a socket
-    client_sockets_list.append(client_server_socket)
     client_server_socket.bind((HOST, SERVER_CLIENT_PORT))
+    client_sockets_list.append(client_server_socket)
     client_server_socket.listen(4)     #Listen for incoming connections
     client_server_socket.setblocking(False)
     print(f"client server starting on {HOST}:{SERVER_CLIENT_PORT}")
@@ -184,18 +189,21 @@ def write(client_socket):
     client_dependency[client_addr] = messageID
     messages[messageID] = message
 
-    print(f"Client writes: ({messageID},{message}) with dependency on {dependency_messageID}")
+    print(f"Client writes: ({messageID},{message}) with dependency on ({dependency_messageID})")
     print("messages: ", messages)
-
-    print("serverskkkkkkkkkkkkkkkkkkkkkkkkkkkkkk: ", server_sockets_list)
 
     #broadcasting to other servers
     for current_socket in server_sockets_list:
         #print("server_addresses: ", server_addresses)
-        print(f"sending message <{messageID},{message}>")
-        current_socket.sendall(dependency_messageID.encode('utf-8'))
-        current_socket.sendall(messageID.encode('utf-8'))
-        current_socket.sendall(message.encode('utf-8'))
+        if(current_socket != self_server_socket):
+            print(f"sending message <{messageID},{message}> dependency: <{dependency_messageID}> to {current_socket}")
+            current_socket.sendall("write".encode('utf-8'))
+            current_socket.sendall(dependency_messageID.encode('utf-8'))
+            current_socket.recv(1024)
+            current_socket.sendall(messageID.encode('utf-8'))
+            current_socket.recv(1024)
+            current_socket.sendall(message.encode('utf-8'))
+            current_socket.recv(1024)
 
 
 #updates the dependency list and returns the key to the user
@@ -245,9 +253,8 @@ def debugger(client_socket):
 if __name__ == '__main__':
     SERVER_PORT = int(input("User port (0 - 65535): " ))
     SERVER_CLIENT_PORT = SERVER_PORT + 1
-    thread1 = threading.Thread(target=start_server)
+    start_server()
     thread2 = threading.Thread(target=client_handler)
     thread3 = threading.Thread(target=server_handler)
-    thread1.start()
     thread2.start()
     thread3.start()
