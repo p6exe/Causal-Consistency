@@ -128,11 +128,15 @@ def server_handler():
                     message = current_socket.recv(1024).decode('utf-8')
                     current_socket.sendall("confirmation".encode('utf-8'))
 
+                    #delay
+                    delay_timer = int(input(f"Input the length of the delay for <{messageID},{message}> (enter 0 for no delay)"))
+                    time.sleep(delay_timer)
+
                     #add to buffer of writes
                     pending_writes[dependency_check] = [messageID, message]
 
                     #dependency check on the buffer/commit the data
-                    dependency_check()
+                    dependency_check(current_socket)
 
                     print(f"Received replicated write from server: ({messageID},{message}) with dependency on {dependency_messageID}")
 
