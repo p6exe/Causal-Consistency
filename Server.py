@@ -41,7 +41,7 @@ MASTER_PORT = 58008         # Master port to retrieve other server ports
 client_dependency = {}  # {clientaddr: messageID}
 messages = {}           # {messageID, message}
 pending_writes = {}     # {dependency_messageID, [messageID, message]}
-pending_reads = {}      # {dependency_messageID, [messageID, message, client_socket]}
+pending_reads = {}      # {dependency_messageID, client_socket}
 delay_message = {}      # {dependency_messageID, [messageID, message]}
 
 client_sockets_list = []    # List of all slient sockets (including server socket)
@@ -108,7 +108,7 @@ def server_handler():
             if current_socket == self_server_socket: #establish new connections
 
                 peer_socket, peer_address = self_server_socket.accept()
-                peer_socket.setblocking(False)
+                peer_socket.setblocking(True)
                 server_sockets_list.append(peer_socket)
                 #server_addresses[peer_socket] = peer_address
                 print(f"Connected by server: {peer_address}")
@@ -127,12 +127,16 @@ def server_handler():
                     message = current_socket.recv(1024).decode('utf-8')
                     
                     #delay
-                    delay_timer = int(input(f"Input the length of the delay for <{messageID},{message}> (enter 0 for no delay)"))
-                    time.sleep(delay_timer)
+                    if(dependency_messageID == "z"):
+                        print(f"delaying input: <{messageID},{message}> depending on <{dependency_messageID}>")
+                        print("buffer: ")
+                        delay_timer = int(input(f"Input the length of the delay for <{messageID},{message}> (enter 0 for no delay)"))
+                        time.sleep(delay_timer)
 
                     #add to buffer of writes
                     pending_writes[dependency_messageID] = [messageID, message]
                     print(f"Received replicated write from server: ({messageID},{message}) with dependency on {dependency_messageID}")
+
                     #dependency check on the buffer/commit the data
                     dependency_check()
 
@@ -147,7 +151,7 @@ def client_handler():
     client_server_socket.bind((HOST, SERVER_CLIENT_PORT))
     client_sockets_list.append(client_server_socket)
     client_server_socket.listen(4)     #Listen for incoming connections
-    client_server_socket.setblocking(False)
+    client_server_socket.setblocking(True)
     print(f"client server starting on {HOST}:{SERVER_CLIENT_PORT}")
 
     while True:
@@ -221,6 +225,8 @@ def read(client_socket):
         client_socket.sendall(message.encode('utf-8'))
         print("client dependency list: ", client_dependency)
         time.sleep(0.5)
+    else:
+        pending_reads[messageID] = client_socket
 
 
 
@@ -240,6 +246,18 @@ def dependency_check():
             print(f"Commiting <{messageID},{message}>")
             index = 0
         index += 1
+
+    index = 0
+    while(index < len(pending_writes)):
+        dependency_messageID = (list(pending_reads.keys()))[index]
+        if(dependency_messageID in messages):
+            message = message[dependency_messageID]
+            client_socket = pending_reads[dependency_messageID]
+            client_socket.sendall(message.encode('utf-8'))
+            print(f"sending read to client: <{dependency_messageID},{message}>")
+            del pending_reads[dependency_messageID]
+        else:
+            index += 1
     print("pending writes: ", pending_writes)
     print("message: ", messages)
     
