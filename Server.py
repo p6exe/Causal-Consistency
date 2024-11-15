@@ -2,6 +2,7 @@ import socket
 import select
 import threading
 import os
+import time
 
 
 '''
@@ -107,7 +108,7 @@ def server_handler():
             if current_socket == self_server_socket: #establish new connections
 
                 peer_socket, peer_address = self_server_socket.accept()
-                peer_socket.setblocking(True)
+                peer_socket.setblocking(False)
                 server_sockets_list.append(peer_socket)
                 #server_addresses[peer_socket] = peer_address
                 print(f"Connected by server: {peer_address}")
@@ -116,29 +117,26 @@ def server_handler():
                 if data:
                     print(f"Received from {current_socket}: {data.decode('utf-8')}")
                 else:
-                    close_socket(current_socket)
+                    close_server(current_socket)
                 operation = data.decode('utf-8')
                 
                 if(operation == "write"):
                     #receives message from other server
                     dependency_messageID = current_socket.recv(1024).decode('utf-8')
-                    current_socket.sendall("confirmation".encode('utf-8'))
                     messageID = current_socket.recv(1024).decode('utf-8')
-                    current_socket.sendall("confirmation".encode('utf-8'))
                     message = current_socket.recv(1024).decode('utf-8')
-                    current_socket.sendall("confirmation".encode('utf-8'))
-
+                    
                     #delay
                     delay_timer = int(input(f"Input the length of the delay for <{messageID},{message}> (enter 0 for no delay)"))
                     time.sleep(delay_timer)
 
                     #add to buffer of writes
-                    pending_writes[dependency_check] = [messageID, message]
-
-                    #dependency check on the buffer/commit the data
-                    dependency_check(current_socket)
-
+                    pending_writes[dependency_messageID] = [messageID, message]
                     print(f"Received replicated write from server: ({messageID},{message}) with dependency on {dependency_messageID}")
+                    #dependency check on the buffer/commit the data
+                    dependency_check()
+
+                    
 
 #writes to this server
 #then broadcasts to other servers
@@ -169,8 +167,6 @@ def client_handler():
                 #handles client to server commands and broadcasts to other servers
 
                 data = current_socket.recv(1024)
-                if data:
-                    print(f"Received from {client_addresses[current_socket]}: {data.decode('utf-8')}")
 
                 client_command = data.decode('utf-8')
                 if(client_command == "read"):
@@ -200,31 +196,53 @@ def write(client_socket):
     for current_socket in server_sockets_list:
         #print("server_addresses: ", server_addresses)
         if(current_socket != self_server_socket):
-            print(f"sending message <{messageID},{message}> dependency: <{dependency_messageID}> to {current_socket}")
+            print(f"sending message <{messageID},{message}> dependency: <{dependency_messageID}>")
             current_socket.sendall("write".encode('utf-8'))
+            time.sleep(0.5)
+            #current_socket.recv(1024)
             current_socket.sendall(dependency_messageID.encode('utf-8'))
-            current_socket.recv(1024)
+            time.sleep(0.5)
+            #current_socket.recv(1024)
             current_socket.sendall(messageID.encode('utf-8'))
-            current_socket.recv(1024)
+            time.sleep(0.5)
+            #current_socket.recv(1024)
             current_socket.sendall(message.encode('utf-8'))
-            current_socket.recv(1024)
+            time.sleep(0.5)
+            #current_socket.recv(1024)
 
 
 #updates the dependency list and returns the key to the user
 def read(client_socket):
     messageID = client_socket.recv(1024).decode('utf-8')
+    client_addr = client_addresses[client_socket]
     if messageID in messages:
+        client_dependency[client_addr] = messageID
         message = messages[messageID]
         client_socket.sendall(message.encode('utf-8'))
+        print("client dependency list: ", client_dependency)
+        time.sleep(0.5)
 
 
 
 #adds all message that can be written
 def dependency_check():
-    pass
-
-def delay():
-    pass
+    print("Dependency Check: ")
+    #iterates through the buffered writes to commit all the messages
+    index = 0
+    while(index < len(pending_writes)):
+        dependency_messageID = (list(pending_writes.keys()))[index]
+        #commit the buffered message into messages
+        if(dependency_messageID in messages or dependency_messageID == "None"):
+            messageID = pending_writes[dependency_messageID][0]
+            message = pending_writes[dependency_messageID][1]
+            del pending_writes[dependency_messageID]
+            messages[messageID] = message
+            print(f"Commiting <{messageID},{message}>")
+            index = 0
+        index += 1
+    print("pending writes: ", pending_writes)
+    print("message: ", messages)
+    
 
 #Close the server and all client connections
 def close_server(server_socket):
