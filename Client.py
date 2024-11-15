@@ -25,7 +25,7 @@ def connect_to_server():
 
     # Receive a response from the server
     while(close_flag == True):
-        commands = ["read", "write"]
+        commands = ["read", "write", "close"]
         print("Commands: ",commands)
         command = input("command: ").lower()
 
@@ -33,6 +33,8 @@ def connect_to_server():
             write(server_socket)
         elif(command == "read"):
             read(server_socket)
+        elif(command == "close"):
+            close_flag = False
         else:
             print("not a valid command: ",commands)
 
